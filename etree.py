@@ -15,17 +15,40 @@ def recreate_docx(original_extract_dir, new_docx_path):
                 arcname = os.path.relpath(file_path, original_extract_dir)
                 docx.write(file_path, arcname)
 
-def print_xml_text_values(xml_file_path):
+def translate_text(text):
+    # Mock translation function (for example, converting text to uppercase)
+    # Replace this function with actual translation logic (e.g., using an API)
+    return text.upper()
+
+def replace_paragraph_text_with_translation(xml_file_path):
     try:
         tree = ET.parse(xml_file_path)
         root = tree.getroot()
-        for elem in root.iter():
-            if elem.text:
-                print(elem.text.strip())  # Print the text, stripping leading/trailing whitespace
+
+        # Namespace dictionary for looking up XML elements with namespaces
+        namespaces = {
+            'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+        }
+
+        # Find all paragraph elements
+        paragraphs = root.findall('.//w:p', namespaces)
+
+        for p in paragraphs:
+            # Find all runs within the paragraph
+            runs = p.findall('.//w:r', namespaces)
+            for r in runs:
+                text_element = r.find('.//w:t', namespaces)
+                if text_element is not None and text_element.text:
+                    # Translate the text and replace it
+                    translated_text = translate_text(text_element.text)
+                    text_element.text = translated_text
+
+        tree.write(xml_file_path, encoding='utf-8', xml_declaration=True)
+    
     except ET.ParseError as e:
         print(f"Error parsing {xml_file_path}: {e}")
 
-def analyze_and_duplicate_docx(input_docx, output_docx):
+def analyze_and_translate_docx(input_docx, output_docx):
     # Step 1: Extract the original docx file
     extract_dir = 'extracted_docx'
     if os.path.exists(extract_dir):
@@ -34,23 +57,14 @@ def analyze_and_duplicate_docx(input_docx, output_docx):
     
     extract_docx(input_docx, extract_dir)
 
-    # Step 2: Print text content from XML files
+    # Step 2: Replace text in document.xml with translated text
     document_xml_path = os.path.join(extract_dir, 'word/document.xml')
     if os.path.exists(document_xml_path):
-        print("Text content from document.xml:")
-        print_xml_text_values(document_xml_path)
+        replace_paragraph_text_with_translation(document_xml_path)
     else:
         print("document.xml not found in the extracted .docx file.")
 
-    # Optionally, print text from other XML files, such as headers, footers, etc.
-    for root, dirs, files in os.walk(os.path.join(extract_dir, 'word')):
-        for file in files:
-            if file.endswith('.xml') and file != 'document.xml':
-                xml_file_path = os.path.join(root, file)
-                print(f"\nText content from {file}:")
-                print_xml_text_values(xml_file_path)
-
-    # Step 3: Recreate the docx file from the extracted and analyzed content
+    # Step 3: Recreate the docx file from the modified content
     recreate_docx(extract_dir, output_docx)
 
     # Clean up the extracted directory
@@ -59,4 +73,4 @@ def analyze_and_duplicate_docx(input_docx, output_docx):
 # Usage
 input_docx = 'input.docx'  # Path to your input .docx file
 output_docx = 'output.docx'  # Path to the output .docx file to be generated
-analyze_and_duplicate_docx(input_docx, output_docx)
+analyze_and_translate_docx(input_docx, output_docx)
