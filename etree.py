@@ -2,8 +2,7 @@ import os
 import zipfile
 import xml.etree.ElementTree as ET
 import shutil
-import re
-from googletrans import Translator  # You can replace this with another translation API you use
+from googletrans import Translator  # Replace with your translation API if needed
 
 # Function to extract a .docx file
 def extract_docx(docx_path, extract_dir):
@@ -21,23 +20,33 @@ def recreate_docx(original_extract_dir, new_docx_path):
 
 # Mock translation function (Replace this with actual translation logic)
 def translate_text(text, target_language='en'):
-    
-    return text.upper()
+    # print("Original paragraph:\n", text)
+    translated = text.upper() + '++'
+    print(translated)
+    print("=======================")
+    return translated
 
-# Function to preserve XML structure while translating text nodes
-def translate_and_preserve_structure(xml_content, target_language='en'):
-    # Parse the XML content into an ElementTree
+# Function to translate each paragraph as a whole
+def translate_paragraphs(xml_content, target_language='en'):
     root = ET.fromstring(xml_content)
+    namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
 
-    for elem in root.iter():
-        if elem.tag.endswith('t'):  # Only target text nodes ('w:t')
-            original_text = elem.text if elem.text else ''
-            translated_text = translate_text(original_text, target_language)
-            
-            # Replace the original text with the translated text
-            elem.text = translated_text
-    
-    # Return the modified XML structure as a string
+    # Find all paragraphs in the document
+    for paragraph in root.findall('.//w:p', namespaces):
+        # Gather all text within this paragraph
+        paragraph_text = ''.join(node.text for node in paragraph.findall('.//w:t', namespaces) if node.text)
+        if paragraph_text.strip():  # Skip empty paragraphs
+            translated_text = translate_text(paragraph_text, target_language)
+
+            # Replace original text nodes with translated text
+            text_nodes = paragraph.findall('.//w:t', namespaces)
+            for node in text_nodes:
+                node.clear()  # Clear the text node
+
+            # Reassign the translated text back into the first text node
+            if text_nodes:
+                text_nodes[0].text = translated_text
+
     return ET.tostring(root, encoding='unicode')
 
 # Main function to handle translation of a .docx file
@@ -56,8 +65,8 @@ def analyze_and_translate_docx(input_docx, output_docx, target_language='en'):
         with open(document_xml_path, 'r', encoding='utf-8') as file:
             document_xml_content = file.read()
         
-        # Perform the translation and structure preservation
-        translated_xml_content = translate_and_preserve_structure(document_xml_content, target_language)
+        # Perform the translation by paragraph
+        translated_xml_content = translate_paragraphs(document_xml_content, target_language)
         
         # Write the translated content back to the document.xml
         with open(document_xml_path, 'w', encoding='utf-8') as file:
