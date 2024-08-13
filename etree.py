@@ -18,30 +18,43 @@ def recreate_docx(original_extract_dir, new_docx_path):
                 arcname = os.path.relpath(file_path, original_extract_dir)
                 docx.write(file_path, arcname)
 
-# Function to translate text
+# Translation function
 def translate_text(text, target_language='en'):
     
     return text+'++'
 
-
-# Function to translate paragraphs while preserving the XML structure
-def translate_paragraphs(root, target_language='en'):
+# Function to translate text within paragraphs while preserving structure and numbering
+def translate_paragraphs_preserve_structure(xml_content, target_language='en'):
+    root = ET.fromstring(xml_content)
     namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-    
-    for paragraph in root.findall('.//w:p', namespaces):
-        text_elements = paragraph.findall('.//w:t', namespaces)
-        if text_elements:
-            full_text = ''.join([elem.text for elem in text_elements if elem.text])
-            if full_text.strip():
-                translated_text = translate_text(full_text, target_language)
-                translated_words = translated_text.split()
-                word_index = 0
-                for elem in text_elements:
-                    original_words = elem.text.split()
-                    elem.text = ' '.join(translated_words[word_index:word_index + len(original_words)])
-                    word_index += len(original_words)
 
-# Function to handle headers and footers
+    for paragraph in root.findall('.//w:p', namespaces):
+        paragraph_text = ""
+        text_nodes = []
+
+        # Extract all text in the paragraph
+        for node in paragraph.findall('.//w:t', namespaces):
+            if node.text:
+                paragraph_text += node.text + " "
+                text_nodes.append(node)
+
+        # Translate the entire paragraph text
+        if paragraph_text.strip():
+            translated_text = translate_text(paragraph_text.strip(), target_language)
+            
+            # Reinsert translated text into the original nodes
+            idx = 0
+            words = translated_text.split()
+            for node in text_nodes:
+                original_text = node.text
+                node.text = ""
+                word_count = len(original_text.split())
+                node.text = " ".join(words[idx:idx + word_count])
+                idx += word_count
+
+    return ET.tostring(root, encoding='unicode')
+
+# Function to translate headers and footers if they exist
 def translate_headers_footers(extract_dir, target_language='en'):
     word_dir = os.path.join(extract_dir, 'word')
     header_footer_files = [f for f in os.listdir(word_dir) if f.startswith('header') or f.startswith('footer')]
@@ -49,14 +62,13 @@ def translate_headers_footers(extract_dir, target_language='en'):
     for file_name in header_footer_files:
         file_path = os.path.join(word_dir, file_name)
         if os.path.exists(file_path):
-            tree = ET.parse(file_path)
-            root = tree.getroot()
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
 
-            # Translate only the text elements while preserving the structure
-            translate_paragraphs(root, target_language)
+            translated_content = translate_paragraphs_preserve_structure(content, target_language)
 
-            # Write back the modified XML while preserving structure
-            tree.write(file_path, xml_declaration=True, encoding='utf-8')
+            with open(file_path, 'w', encoding='utf-8') as file:
+                file.write(translated_content)
 
 # Main function to handle translation of a .docx file
 def analyze_and_translate_docx(input_docx, output_docx, target_language='en'):
@@ -69,16 +81,14 @@ def analyze_and_translate_docx(input_docx, output_docx, target_language='en'):
 
     document_xml_path = os.path.join(extract_dir, 'word/document.xml')
     if os.path.exists(document_xml_path):
-        tree = ET.parse(document_xml_path)
-        root = tree.getroot()
+        with open(document_xml_path, 'r', encoding='utf-8') as file:
+            document_xml_content = file.read()
         
-        # Translate the main document content by paragraph
-        translate_paragraphs(root, target_language)
+        translated_xml_content = translate_paragraphs_preserve_structure(document_xml_content, target_language)
 
-        # Write back the modified XML
-        tree.write(document_xml_path, xml_declaration=True, encoding='utf-8')
+        with open(document_xml_path, 'w', encoding='utf-8') as file:
+            file.write(translated_xml_content)
 
-    # Translate headers and footers while preserving structure and placement
     translate_headers_footers(extract_dir, target_language)
 
     recreate_docx(extract_dir, output_docx)
