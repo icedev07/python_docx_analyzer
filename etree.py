@@ -2,7 +2,11 @@ import os
 import zipfile
 import xml.etree.ElementTree as ET
 import shutil
-from googletrans import Translator
+
+# Mock Translation Function (For demonstration purposes)
+def translate_text(text, target_language='en'):
+    # This mock function just adds '++' after the text. Replace it with your actual translation logic.
+    return text + '++'
 
 # Function to extract a .docx file
 def extract_docx(docx_path, extract_dir):
@@ -18,54 +22,37 @@ def recreate_docx(original_extract_dir, new_docx_path):
                 arcname = os.path.relpath(file_path, original_extract_dir)
                 docx.write(file_path, arcname)
 
-# Translation function
-def translate_text(text, target_language='en'):
-    
-    return text+'++'
-
-# Function to translate text within paragraphs while preserving structure and numbering
-def translate_paragraphs_preserve_structure(xml_content, target_language='en'):
+# Function to translate text within paragraphs while preserving structure and excluding hyperlinks
+def translate_paragraphs_exclude_hyperlinks(xml_content, target_language='en'):
     root = ET.fromstring(xml_content)
     namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
 
     for paragraph in root.findall('.//w:p', namespaces):
-        paragraph_text = ""
-        text_nodes = []
-
-        # Extract all text in the paragraph
         for node in paragraph.findall('.//w:t', namespaces):
-            if node.text:
-                paragraph_text += node.text + " "
-                text_nodes.append(node)
+            # Check if the text is part of a hyperlink or URL
+            parent = node.find("..")
+            if parent is not None and (parent.tag.endswith('hyperlink') or 'http' in node.text or 'www' in node.text):
+                continue  # Skip translation for hyperlinks and URLs
 
-        # Translate the entire paragraph text
-        if paragraph_text.strip():
-            translated_text = translate_text(paragraph_text.strip(), target_language)
-            
-            # Reinsert translated text into the original nodes
-            idx = 0
-            words = translated_text.split()
-            for node in text_nodes:
+            if node.text:
                 original_text = node.text
-                node.text = ""
-                word_count = len(original_text.split())
-                node.text = " ".join(words[idx:idx + word_count])
-                idx += word_count
+                translated_text = translate_text(original_text.strip(), target_language)
+                node.text = translated_text
 
     return ET.tostring(root, encoding='unicode')
 
-# Function to translate headers and footers if they exist
-def translate_headers_footers(extract_dir, target_language='en'):
+# Function to translate headers, footers, and footnotes
+def translate_headers_footers_footnotes(extract_dir, target_language='en'):
     word_dir = os.path.join(extract_dir, 'word')
-    header_footer_files = [f for f in os.listdir(word_dir) if f.startswith('header') or f.startswith('footer')]
+    special_files = [f for f in os.listdir(word_dir) if f.startswith('header') or f.startswith('footer') or f == 'footnotes.xml']
 
-    for file_name in header_footer_files:
+    for file_name in special_files:
         file_path = os.path.join(word_dir, file_name)
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
 
-            translated_content = translate_paragraphs_preserve_structure(content, target_language)
+            translated_content = translate_paragraphs_exclude_hyperlinks(content, target_language)
 
             with open(file_path, 'w', encoding='utf-8') as file:
                 file.write(translated_content)
@@ -84,12 +71,12 @@ def analyze_and_translate_docx(input_docx, output_docx, target_language='en'):
         with open(document_xml_path, 'r', encoding='utf-8') as file:
             document_xml_content = file.read()
         
-        translated_xml_content = translate_paragraphs_preserve_structure(document_xml_content, target_language)
+        translated_xml_content = translate_paragraphs_exclude_hyperlinks(document_xml_content, target_language)
 
         with open(document_xml_path, 'w', encoding='utf-8') as file:
             file.write(translated_xml_content)
 
-    translate_headers_footers(extract_dir, target_language)
+    translate_headers_footers_footnotes(extract_dir, target_language)
 
     recreate_docx(extract_dir, output_docx)
     shutil.rmtree(extract_dir)
