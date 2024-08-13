@@ -57,8 +57,29 @@ def translate_headers_footers_footnotes(extract_dir, target_language='en'):
             with open(file_path, 'w', encoding='utf-8') as file:
                 file.write(translated_content)
 
+# Function to append logs to the end of the document
+def append_log_to_document(document_xml_path, log_text):
+    namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+
+    # Read and parse the existing document.xml content
+    tree = ET.parse(document_xml_path)
+    root = tree.getroot()
+
+    # Create a new paragraph element to hold the log
+    new_paragraph = ET.Element(f"{{{namespaces['w']}}}p")
+    run = ET.SubElement(new_paragraph, f"{{{namespaces['w']}}}r")
+    text_element = ET.SubElement(run, f"{{{namespaces['w']}}}t")
+    text_element.text = log_text
+
+    # Append the new paragraph to the document body
+    body = root.find(f".//w:body", namespaces)
+    body.append(new_paragraph)
+
+    # Write the updated content back to document.xml
+    tree.write(document_xml_path, xml_declaration=True, encoding='utf-8')
+
 # Main function to handle translation of a .docx file
-def analyze_and_translate_docx(input_docx, output_docx, target_language='en'):
+def analyze_and_translate_docx(input_docx, output_docx, target_language='en', logs=[]):
     extract_dir = 'extracted_docx'
     if os.path.exists(extract_dir):
         shutil.rmtree(extract_dir)
@@ -78,6 +99,10 @@ def analyze_and_translate_docx(input_docx, output_docx, target_language='en'):
 
     translate_headers_footers_footnotes(extract_dir, target_language)
 
+    # Append logs at the end of the document
+    
+    append_log_to_document(document_xml_path, "log")
+
     recreate_docx(extract_dir, output_docx)
     shutil.rmtree(extract_dir)
 
@@ -85,4 +110,10 @@ def analyze_and_translate_docx(input_docx, output_docx, target_language='en'):
 input_docx = 'input.docx'  # Path to your input .docx file
 output_docx = 'output.docx'  # Path to the output .docx file to be generated
 target_language = 'en'  # Target language code (e.g., 'en' for English, 'fr' for French)
-analyze_and_translate_docx(input_docx, output_docx, target_language)
+logs = [
+    "[Process Log] Translation completed.",
+    "Elapsed time: 10s",
+    "Total Tokens: 1500",
+    "Average Speed: 150 tokens/second"
+]
+analyze_and_translate_docx(input_docx, output_docx, target_language, logs)
