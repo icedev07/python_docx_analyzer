@@ -32,6 +32,8 @@ from spire.doc.common import *
 from urllib.parse import urlparse
 import subprocess
 
+# from urlextract import URLExtract
+
 _libreoffice_lock = multiprocessing.Lock()
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -43,7 +45,7 @@ _work_dir = os.path.join(_results_dir_global, f"llmtrans_tests")
 _converted_dir = os.path.join(_work_dir, "converted")
 os.makedirs(_converted_dir, exist_ok=True)
 
-_file_name = "691247.docx"
+_file_name = "753034.odt"
 
 def extract_docx(docx_path, extract_dir):
     with zipfile.ZipFile(docx_path, 'r') as zip_ref:
@@ -62,18 +64,18 @@ def translate_paragraphs_preserve_structure(xml_content, xml_contents=None):
 
     # Parse XML contents for different languages
     root_en = ET.fromstring(xml_contents["en"])
-    root_de = ET.fromstring(xml_contents["de"])
-    root_it = ET.fromstring(xml_contents["it"])
-    root_es = ET.fromstring(xml_contents["es"])
-    root_pt = ET.fromstring(xml_contents["pt"])
+    # root_de = ET.fromstring(xml_contents["de"])
+    # root_it = ET.fromstring(xml_contents["it"])
+    # root_es = ET.fromstring(xml_contents["es"])
+    # root_pt = ET.fromstring(xml_contents["pt"])
 
     # Dictionary to map language codes to XML roots
     language_roots = {
         "en": root_en,
-        "de": root_de,
-        "it": root_it,
-        "es": root_es,
-        "pt": root_pt
+        # "de": root_de,
+        # "it": root_it,
+        # "es": root_es,
+        # "pt": root_pt
     }
 
     # Get all paragraphs from the original XML content
@@ -163,10 +165,10 @@ def translate_paragraphs_preserve_structure(xml_content, xml_contents=None):
     # Return updated XML for all languages as a dictionary
     return {
         "en": ET.tostring(root_en, encoding='unicode'),
-        "de": ET.tostring(root_de, encoding='unicode'),
-        "it": ET.tostring(root_it, encoding='unicode'),
-        "es": ET.tostring(root_es, encoding='unicode'),
-        "pt": ET.tostring(root_pt, encoding='unicode'),
+        # "de": ET.tostring(root_de, encoding='unicode'),
+        # "it": ET.tostring(root_it, encoding='unicode'),
+        # "es": ET.tostring(root_es, encoding='unicode'),
+        # "pt": ET.tostring(root_pt, encoding='unicode'),
     }
 
 # Function to translate headers, footers, and footnotes if they exist
@@ -227,10 +229,10 @@ def analyze_and_translate_docx(input_docx, output_docxs):
 
     extract_dirs = {
         "en" : os.path.join(extract_dir, '_en'),
-        "de" : os.path.join(extract_dir, '_de'),
-        "it" : os.path.join(extract_dir, '_it'),
-        "es" : os.path.join(extract_dir, '_es'),
-        "pt" : os.path.join(extract_dir, '_pt'),
+        # "de" : os.path.join(extract_dir, '_de'),
+        # "it" : os.path.join(extract_dir, '_it'),
+        # "es" : os.path.join(extract_dir, '_es'),
+        # "pt" : os.path.join(extract_dir, '_pt'),
     }
 
     for key, value in extract_dirs.items():
@@ -273,15 +275,62 @@ def analyze_and_translate_docx(input_docx, output_docxs):
         recreate_docx(value, output_docxs[key])
         shutil.rmtree(value)
 
+def find_all_urls(text):
+    # Improved regex pattern to capture both www and http/https URLs
+    pattern = re.compile(
+        r'(?:(?:https?://|www\.|ftp://)[^\s.,;:()"*!?]+(?:\.[^\s.,;:()"*!?]+)*)'
+    )
+    return pattern.findall(text)
+
+# def find_all_urls_with_urlextract(text):
+#     extractor = URLExtract()
+    
+#     # Add www. prefix to potential domain-only URLs
+#     modified_text = re.sub(r'\b(www\.[^\s.,;:()"*!?]+\.[a-z]{2,})\b', r'http://\1', text)
+    
+#     return extractor.find_urls(modified_text)
+
 # Translation function
 def translate_text(text):
 
-    # print("---------------translate_text-----------------------")
-    # print(text+"*")
+    print("---------------translate_text-----------------------")
+    print(text+"*")
 
     # if not text.strip() =='':
     if contains_any_language_alpha(text):
     # if is_non_alphanumeric(text):
+        # print(len(find_all_urls(text))>0) 
+
+        # if(len(find_all_urls(text))>0) :
+        #     urls = find_all_urls(text)
+        #     print("Detected URLs:")
+        #     for url in urls:
+        #         print(url)
+
+        urls = find_all_urls(text)
+
+        print("----------check text contains urls---------")
+        print(len(urls)>0) 
+
+        # if(len(urls) > 0) :
+        #     print("Detected URLs:")
+        #     i = 0
+        #     for url in urls:
+        #         print(url)
+        #         text = re.sub(url, 'u-'+i, text)
+        #         i = i + 1
+
+        if(urls) : 
+            replacements = {}
+            for i, url in enumerate(urls):
+                print(url)
+                placeholder = f'--u{i}--'
+                # Use re.escape to avoid regex issues with special characters in URLs
+                text = re.sub(re.escape(url), placeholder, text)
+                replacements[placeholder] = url  # Optional: keep track of replacements
+
+        print(text)
+
         special_chars = ''
         for char in text:
             if char.isalpha() or char.isdigit(): 
@@ -307,6 +356,17 @@ def translate_text(text):
             "es" : special_chars + json_data.get("ES_RESULT", ""),
             "pt" : special_chars + json_data.get("PT_RESULT", "")
         }
+
+        if urls:
+            for key, text in traslated_text.items():
+                for i, url in enumerate(urls):
+                    placeholder = f'--u{i}--'
+                    # Replace the placeholder with the original URL
+                    text = re.sub(re.escape(placeholder), url, text)
+                traslated_text[key] = text
+
+        print("--------traslated_text---------")
+        print(traslated_text)
 
         # traslated_text = {
         #     "en" : special_chars + text + "++",
@@ -356,10 +416,10 @@ def translate_document():
         raise RuntimeError(f"File conversion failed: {e.stderr}") from e
     output_paths = {
         "en": os.path.join(_results_dir_global, source_filename_without_extension + '_en.docx'),
-        "de": os.path.join(_results_dir_global, source_filename_without_extension + '_de.docx'),
-        "it": os.path.join(_results_dir_global, source_filename_without_extension + '_it.docx'),
-        "es": os.path.join(_results_dir_global, source_filename_without_extension + '_es.docx'),
-        "pt": os.path.join(_results_dir_global, source_filename_without_extension + '_pt.docx'),
+        # "de": os.path.join(_results_dir_global, source_filename_without_extension + '_de.docx'),
+        # "it": os.path.join(_results_dir_global, source_filename_without_extension + '_it.docx'),
+        # "es": os.path.join(_results_dir_global, source_filename_without_extension + '_es.docx'),
+        # "pt": os.path.join(_results_dir_global, source_filename_without_extension + '_pt.docx'),
     }
     analyze_and_translate_docx(converted_file_path, output_paths)   
     output_filenames = {k: os.path.basename(v) for k, v in output_paths.items()}
